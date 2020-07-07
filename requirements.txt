@@ -1,0 +1,5 @@
+discord.py>=1.2.5
+click
+asyncpg
+pyyaml
+jishaku
