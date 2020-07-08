@@ -8,7 +8,7 @@ import logging
 from .utils import db
 
 
-log = logging.getLogger("betterhighlight.highlight")
+log = logging.getLogger("glados.highlight")
 
 
 class HighlightWords(db.Table, table_name="highlight_words"):

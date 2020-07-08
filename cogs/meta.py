@@ -5,6 +5,129 @@ import traceback
 import sys
 
 
+class HelpCommand(commands.HelpCommand):
+    def get_base_embed(self):
+        ctx = self.context
+        bot = ctx.bot
+        em = discord.Embed(
+            title=f"You asked for help? Fine. Here you go.",
+            color=discord.Color.blurple(),
+        )
+        em.set_thumbnail(url=ctx.bot.user.avatar_url)
+        em.set_footer(text="I'm only displaying commands that you can use")
+        return em
+
+    async def send_bot_help(self, mapping):
+        ctx = self.context
+        bot = ctx.bot
+
+        em = self.get_base_embed()
+        em.description = (
+            f"{bot.description}\n\n"
+            f"If you want more info on a command, use `@{bot.user} help [command]`"
+        )
+
+        filtered = await self.filter_commands(bot.commands)
+
+        formatted = []
+
+        for command in filtered:
+            cmd_formatted = f"**`{command.name}`**"
+
+            if command.description:
+                cmd_formatted += f" - {command.description}"
+
+            formatted.append(cmd_formatted)
+
+        cmds = "\n".join(formatted)
+        em.description += f"\n\nCommands:\n{cmds}"
+
+        await ctx.send(embed=em)
+
+    async def send_command_help(self, command):
+        ctx = self.context
+        bot = ctx.bot
+
+        em = self.get_base_embed()
+
+        em.set_footer(text=em.Empty)
+
+        em.description = f"**`@{bot.user} "
+        em.description += f"{command.parent} " if command.parent is not None else ""
+        em.description += command.name
+        em.description += f" {command.usage}`**" if command.usage is not None else "`**"
+
+        if command.description:
+            em.description += f" - {command.description}"
+
+        if command.help:
+            em.description += "\n" + command.help + "\n"
+
+        if command.aliases:
+            formatted_aliases = []
+
+            for alias in command.aliases:
+                formatted_alias = f"`@{bot.user} "
+                formatted_alias += (
+                    f"{command.parent} " if command.parent is not None else ""
+                )
+
+                formatted_alias += alias + "`"
+                formatted_aliases.append(formatted_alias)
+
+            em.description += f"\nAliases: {', '.join(formatted_aliases)}"
+
+        await ctx.send(embed=em)
+
+    async def command_callback(self, ctx, *, command=None):
+        # I am only overriding this because I want to add
+        # case insensitivity for cogs
+
+        await self.prepare_help_command(ctx, command)
+        bot = ctx.bot
+
+        if command is None:
+            mapping = self.get_bot_mapping()
+            return await self.send_bot_help(mapping)
+
+        maybe_coro = discord.utils.maybe_coroutine
+
+        # At this point, the command could either be a cog
+        # or a command
+        keys = command.split(" ")
+        cmd = bot.all_commands.get(keys[0])
+        if cmd is None:
+            string = await maybe_coro(
+                self.command_not_found, self.remove_mentions(keys[0])
+            )
+
+            # At this point, the command was not found
+            # If the cog exists, send that
+
+            return await self.send_error_message(string)
+
+        for key in keys[1:]:
+            try:
+                found = cmd.all_commands.get(key)
+            except AttributeError:
+                string = await maybe_coro(
+                    self.subcommand_not_found, cmd, self.remove_mentions(key)
+                )
+                return await self.send_error_message(string)
+            else:
+                if found is None:
+                    string = await maybe_coro(
+                        self.subcommand_not_found, cmd, self.remove_mentions(key)
+                    )
+                    return await self.send_error_message(string)
+                cmd = found
+
+        if isinstance(cmd, commands.Group):
+            return await self.send_group_help(cmd)
+        else:
+            return await self.send_command_help(cmd)
+
+
 class Meta(commands.Cog):
     """Everything to do with the bot itself."""
 
@@ -13,7 +136,7 @@ class Meta(commands.Cog):
         self.log = self.bot.log
 
         self._original_help_command = bot.help_command
-        bot.help_command = commands.MinimalHelpCommand()
+        bot.help_command = HelpCommand()
         bot.help_command.cog = self
 
     def cog_unload(self):
@@ -26,8 +149,8 @@ class Meta(commands.Cog):
         if content == f"<@{id}>" or content == f"<@!{id}>":
             dev = self.bot.get_user(224513210471022592)
             await message.channel.send(
-                f"Hi there! :wave: I'm a bot made by {dev}."
-                "\nTo find out more about me, type:"
+                f"Hello and, again, welcome to the Aperture Science computer-aided enrichment center."
+                "\nIf you're curious about me, type:"
                 f" `@{self.bot.user} help`"
             )
 

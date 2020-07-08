@@ -19,7 +19,7 @@ formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s
 file_logger = logging.getLogger("discord")
 file_logger.setLevel(logging.DEBUG)
 file_handler = logging.FileHandler(
-    filename="betterhighlight.log", encoding="utf-8", mode="w"
+    filename="glados.log", encoding="utf-8", mode="w"
 )
 file_handler.setFormatter(formatter)
 file_logger.addHandler(file_handler)
@@ -30,7 +30,7 @@ handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-log = logging.getLogger("betterhighlight")
+log = logging.getLogger("glados")
 log.setLevel(logging.INFO)
 log.addHandler(handler)
 log.addHandler(file_handler)
@@ -44,7 +44,7 @@ initial_extensions = [
 ]
 
 
-class BetterHighlight(commands.Bot):
+class GlaDOS(commands.Bot):
     def __init__(self):
         self.config = Config("config.yml")
 
@@ -52,7 +52,7 @@ class BetterHighlight(commands.Bot):
 
         super().__init__(
             command_prefix=commands.when_mentioned,
-            description="My crack at a Discord bot that notifies users about highlighted words",
+            description="Notifications for trigger words in messages",
             owner_id=224513210471022592,
             case_insensitive=True,
         )
@@ -174,5 +174,5 @@ class BetterHighlight(commands.Bot):
 
 
 if __name__ == "__main__":
-    bot = BetterHighlight()
+    bot = GlaDOS()
     bot.run()
