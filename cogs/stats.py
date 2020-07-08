@@ -52,7 +52,7 @@ class Commands(db.Table):
     failed = db.Column(db.Boolean, index=True)
 
 
-class Highlights(db.Table):
+class Triggers(db.Table):
     id = db.PrimaryKeyColumn()
     word = db.Column(db.String, index=True)
     guild_id = db.Column(db.Integer(big=True), index=True)
@@ -89,7 +89,7 @@ class Stats(commands.Cog):
 
         self._batch_lock = asyncio.Lock(loop=bot.loop)
         self._cmd_data_batch = []
-        self._highlight_data_batch = []
+        self._trigger_data_batch = []
         self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert_loop.start()
 
@@ -107,18 +107,18 @@ class Stats(commands.Cog):
                 self.log.info("Registered %s commands to the database.", total)
             self._cmd_data_batch.clear()
 
-        query = """INSERT INTO highlights (word, guild_id, channel_id, author_id, user_id, invoked_at)
+        query = """INSERT INTO triggers (word, guild_id, channel_id, author_id, user_id, invoked_at)
                    SELECT x.word, x.guild, x.channel, x.author, x.uid, x.invoked_at
                    FROM jsonb_to_recordset($1::jsonb) AS
                    x(word TEXT, guild BIGINT, channel BIGINT, author BIGINT, uid BIGINT, invoked_at TIMESTAMP)
                 """
 
-        if self._highlight_data_batch:
-            await self.bot.pool.execute(query, self._highlight_data_batch)
-            total = len(self._highlight_data_batch)
+        if self._trigger_data_batch:
+            await self.bot.pool.execute(query, self._trigger_data_batch)
+            total = len(self._trigger_data_batch)
             if total > 1:
-                self.log.info("Registered %s highlights to the database.", total)
-            self._highlight_data_batch.clear()
+                self.log.info("Registered %s triggers to the database.", total)
+            self._trigger_data_batch.clear()
 
     def cog_unload(self):
         self.bulk_insert_loop.stop()
@@ -129,18 +129,18 @@ class Stats(commands.Cog):
             await self.bulk_insert()
 
     @commands.Cog.listener()
-    async def on_highlight(self, message, highlight):
-        await self.register_highlight(message, highlight)
+    async def on_trigger(self, message, trigger):
+        await self.register_trigger(message, trigger)
 
-    async def register_highlight(self, message, highlight):
+    async def register_trigger(self, message, trigger):
         async with self._batch_lock:
-            self._highlight_data_batch.append(
+            self._trigger_data_batch.append(
                 {
-                    "word": highlight.word,
-                    "guild": highlight.guild_id,
+                    "word": trigger.word,
+                    "guild": trigger.guild_id,
                     "channel": message.channel.id,
                     "author": message.author.id,
-                    "uid": highlight.user_id,
+                    "uid": trigger.user_id,
                     "invoked_at": message.created_at.isoformat(),
                 }
             )
@@ -187,20 +187,20 @@ class Stats(commands.Cog):
 
         em.add_field(name="Total commands used", value=count[0])
 
-        query = "SELECT COUNT(*) FROM highlights"
+        query = "SELECT COUNT(*) FROM triggers"
         count = await ctx.db.fetchrow(query)
 
-        em.add_field(name="Total highlights", value=count[0])
+        em.add_field(name="Total triggers", value=count[0])
 
         query = "SELECT COUNT(*) FROM commands WHERE guild_id=$1"
         count = await ctx.db.fetchrow(query, ctx.guild.id)
 
         em.add_field(name="Total commands used here", value=count[0])
 
-        query = "SELECT COUNT(*) FROM highlights WHERE guild_id=$1"
+        query = "SELECT COUNT(*) FROM triggers WHERE guild_id=$1"
         count = await ctx.db.fetchrow(query, ctx.guild.id)
 
-        em.add_field(name="Total highlights here", value=count[0])
+        em.add_field(name="Total triggers here", value=count[0])
 
         await ctx.send(embed=em)
 

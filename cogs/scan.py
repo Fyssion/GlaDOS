@@ -8,10 +8,10 @@ import logging
 from .utils import db
 
 
-log = logging.getLogger("glados.highlight")
+log = logging.getLogger("glados.scanner")
 
 
-class HighlightWords(db.Table, table_name="highlight_words"):
+class TriggerWords(db.Table, table_name="trigger_words"):
     id = db.PrimaryKeyColumn()
 
     word = db.Column(db.String, index=True)
@@ -22,11 +22,11 @@ class HighlightWords(db.Table, table_name="highlight_words"):
     @classmethod
     def create_table(cls, *, exists_ok=True):
         statement = super().create_table(exists_ok=exists_ok)
-        sql = "CREATE UNIQUE INDEX IF NOT EXISTS words_uniq_idx ON highlight_words (LOWER(word), user_id, guild_id);"
+        sql = "CREATE UNIQUE INDEX IF NOT EXISTS words_uniq_idx ON trigger_words (LOWER(word), user_id, guild_id);"
         return statement + "\n" + sql
 
 
-class HighlightWord:
+class TriggerWord:
     @classmethod
     def from_record(cls, record):
         self = cls()
@@ -40,22 +40,44 @@ class HighlightWord:
         return self
 
 
-class Highlight(commands.Cog):
+class Scanner(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
         self.delete_timer = bot.delete_timer
 
-    async def send_highlight(self, message, word, record):
-        highlight_word = HighlightWord.from_record(record)
-        user = self.bot.get_user(highlight_word.user_id)
+    def format_message(self, message, *, content=None, highlight=False):
+        time_formatting = "%H:%M "
+
+        content = content or discord.utils.escape_markdown(message.content)
+
+        sent = message.created_at.strftime(time_formatting)
+        timezone = message.created_at.strftime("%Z")
+        sent += timezone or "UTC"
+
+        if len(content) > 50:
+            content = content[:50] + "..."
+
+        else:
+            content = content
+
+        formatted = f"`{sent}` {message.author}: {content}"
+
+        if highlight:
+            formatted = f"> {formatted}"
+
+        return formatted
+
+    async def send_notification(self, message, word, record):
+        trigger_word = TriggerWord.from_record(record)
+        user = self.bot.get_user(trigger_word.user_id)
 
         log.info(
-            f"Recieved highlight with word {word} for user {highlight_word.user_id}"
+            f"Recieved highlight with word {word} for user {trigger_word.user_id}"
         )
 
         if not user:
-            log.info(f"User {highlight_word.user_id} not found in cache, aborting")
+            log.info(f"User {trigger_word.user_id} not found in cache, aborting")
             return
 
         if user == message.author:
@@ -83,9 +105,9 @@ class Highlight(commands.Cog):
                     log.info(f"{message.channel} is in {user}'s blocked list, aborting")
                     return
 
-        self.bot.dispatch("highlight", message, highlight_word)
+        self.bot.dispatch("trigger", message, trigger_word)
 
-        log.info(f"Building message list for message {message.id}")
+        log.info(f"Building notification for message {message.id}")
         # Get a list of messages that meet certain requirements
         matching_messages = [
             m
@@ -95,30 +117,18 @@ class Highlight(commands.Cog):
             and m.id != message.id
         ]
 
-        time_formatting = "%H:%M "
-
         # Get the first three messages in that list
         previous_messages = matching_messages[:3]
 
         messages = []
 
         for msg in reversed(previous_messages):
-            sent = msg.created_at.strftime(time_formatting)
-            timezone = msg.created_at.strftime("%Z")
-            sent += timezone or "UTC"
-
-            if len(msg.content) > 25:
-                content = msg.content[:25] + "..."
-
-            else:
-                content = msg.content
-
-            messages.append(f"`{sent}` {msg.author}: {content}")
+            messages.append(self.format_message(msg))
 
         # Bold the word in the highlighted message
         position = 0
         start_index = None
-        content = list(message.content)
+        content = list(discord.utils.escape_markdown(message.content))
 
         for i, letter in enumerate(content):
             if letter.lower() == word[position]:
@@ -140,17 +150,11 @@ class Highlight(commands.Cog):
 
         content = "".join(content)
 
-        sent = message.created_at.strftime(time_formatting)
-
-        timezone = message.created_at.strftime("%Z")
-        sent += timezone or "UTC"
-
-        messages.append(f"> `{sent}` {message.author}: {content}")
+        messages.append(self.format_message(message, content=content, highlight=True))
 
         # See if there are any messages after
 
         # First, see if there are any messages after that have already been sent
-
         next_messages = []
 
         matching_messages = [
@@ -161,10 +165,13 @@ class Highlight(commands.Cog):
             and m.id != message.id
         ]
 
+        # If there are messages already sent, append those and continue
         if len(matching_messages) > 2:
             next_messages.append(matching_messages[0])
             next_messages.append(matching_messages[1])
 
+        # Otherwise, add the cached message(s)
+        # and/or wait for the remaining message(s)
         else:
             for msg in matching_messages:
                 next_messages.append(msg)
@@ -181,21 +188,12 @@ class Highlight(commands.Cog):
                 except asyncio.TimeoutError:
                     pass
 
+        # Add the next messages to the formatted list
         for msg in next_messages:
-            sent = msg.created_at.strftime(time_formatting)
-            timezone = msg.created_at.strftime("%Z")
-            sent += timezone or "UTC"
-
-            if len(msg.content) > 25:
-                content = msg.content[:25] + "..."
-
-            else:
-                content = msg.content
-
-            messages.append(f"`{sent}` {msg.author}: {content}")
+            messages.append(self.format_message(message))
 
         em = discord.Embed(
-            title=f"Highlighted word: {word}",
+            title=f"Trigger word: {word}",
             description="\n".join(messages),
             color=discord.Color.blurple(),
             timestamp=message.created_at,
@@ -207,53 +205,53 @@ class Highlight(commands.Cog):
         em.set_footer(text="Message sent")
 
         msg = (
-            f"I found a highlight word: **{word}**!\n"
+            f"I found a trigger word: **{word}**\n"
             f"Channel: {channel.mention}\n"
             f"Server: {guild}"
         )
 
         await user.send(msg, embed=em)
 
-    async def get_highlight_words(self, message, word):
-        query = """SELECT * FROM highlight_words
+    async def get_trigger_words(self, message, word):
+        query = """SELECT * FROM trigger_words
                    WHERE word=$1 AND guild_id=$2;
                 """
 
         records = await self.bot.pool.fetch(query, word, message.guild.id)
 
         for record in records:
-            self.bot.loop.create_task(self.send_highlight(message, word, record))
+            self.bot.loop.create_task(self.send_notification(message, word, record))
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
-        # Check if the word is in the highlight words cache
+        # Check if the word is in the trigger words cache
         # Create a task so I can run the queries and send the messages concurrently
         # and not one at a time
-        for word in self.bot.highlight_words:
+        for word in self.bot.trigger_words:
             if word in message.content.lower():
-                self.bot.loop.create_task(self.get_highlight_words(message, word))
+                self.bot.loop.create_task(self.get_trigger_words(message, word))
 
     @commands.command(
         name="add",
-        description="Add a word to your highlighted words list",
+        description="Add a word to your triggers",
         usage="[word]",
     )
     async def _add(self, ctx, *word):
         self.delete_timer(ctx.message)
 
         if len(word) > 1:
-            raise commands.BadArgument("You can only add single words to your list.")
+            raise commands.BadArgument("You can only add single words to your triggers.")
 
         word = word[0].lower().strip()
 
-        query = """INSERT INTO highlight_words (word, user_id, guild_id)
+        query = """INSERT INTO trigger_words (word, user_id, guild_id)
                    VALUES ($1, $2, $3);
                 """
 
-        query = """INSERT INTO highlight_words (word, user_id, guild_id)
+        query = """INSERT INTO trigger_words (word, user_id, guild_id)
                    VALUES ($1, $2, $3);
                 """
 
@@ -266,7 +264,7 @@ class Highlight(commands.Cog):
 
             except asyncpg.UniqueViolationError:
                 await tr.rollback()
-                await ctx.safe_send(f"You already have this highlight word registered.")
+                await ctx.safe_send(f"You already have this trigger registered.")
 
             except Exception:
                 await tr.rollback()
@@ -275,20 +273,20 @@ class Highlight(commands.Cog):
             else:
                 await tr.commit()
 
-                if word not in self.bot.highlight_words:
-                    self.bot.highlight_words.append(word)
+                if word not in self.bot.trigger_words:
+                    self.bot.trigger_words.append(word)
 
-                await ctx.safe_send(f"Successfully updated your highlight words list.")
+                await ctx.safe_send(f"Successfully updated your triggers.")
 
     @commands.command(
         name="remove",
-        description="Remove a word from your highlighted words list",
+        description="Remove a word from your triggers",
         usage="[word]",
     )
     async def _remove(self, ctx, word):
         self.delete_timer(ctx.message)
 
-        query = """DELETE FROM highlight_words
+        query = """DELETE FROM trigger_words
                    WHERE word=$1 AND user_id=$2 AND guild_id=$3
                    RETURNING id;
                 """
@@ -297,36 +295,36 @@ class Highlight(commands.Cog):
         )
 
         if deleted is None:
-            await ctx.safe_send(f"That word isn't in your highlighted words list.")
+            await ctx.safe_send(f"That word isn't in your triggers.")
 
         else:
-            await ctx.safe_send("Successfully updated your highlighted words list.")
+            await ctx.safe_send("Successfully updated your triggers.")
 
     @commands.command(
         name="all",
-        description="View all your highlighted words for this server",
+        description="View all your triggers for this server",
         aliases=["list", "show"],
     )
     async def _all(self, ctx):
         self.delete_timer(ctx.message)
 
-        query = """SELECT word FROM highlight_words
+        query = """SELECT word FROM trigger_words
                    WHERE user_id=$1 AND guild_id=$2;
                 """
 
         records = await ctx.db.fetch(query, ctx.author.id, ctx.guild.id)
 
         if not records:
-            return await ctx.safe_send("You have no highlighted words for this server.")
+            return await ctx.safe_send("You have no triggers for this server.")
 
         words = "\n".join([r[0] for r in records])
 
-        em = discord.Embed(title="Your Highlight Words", description=words, color=discord.Color.blurple())
+        em = discord.Embed(title="Your Triggers", description=words, color=discord.Color.blurple())
 
-        em.set_footer(text=f"Total words: {len(records)}")
+        em.set_footer(text=f"Total triggers: {len(records)}")
 
         await ctx.safe_send(embed=em, delete_after=10.0)
 
 
 def setup(bot):
-    bot.add_cog(Highlight(bot))
+    bot.add_cog(Scanner(bot))

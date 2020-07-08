@@ -39,7 +39,7 @@ log.addHandler(file_handler)
 initial_extensions = [
     "cogs.admin",
     "cogs.config",
-    "cogs.highlight",
+    "cogs.scan",
     "cogs.meta",
     "cogs.stats",
     "cogs.timers",
@@ -50,17 +50,25 @@ class GlaDOS(commands.Bot):
     def __init__(self):
         self.config = Config("config.yml")
 
+        self.debug = self.config.debug
+
         self.log = log
 
+        if self.debug:
+            self.log.info("Starting bot in debug mode...")
+            command_prefix = "debug "
+
+        else:
+            self.log.info("Starting bot...")
+            command_prefix = commands.when_mentioned
+
         super().__init__(
-            command_prefix=commands.when_mentioned,
+            command_prefix=command_prefix,
             description="I'll watch chat for your trigger words and notify you if I see one",
             owner_id=224513210471022592,
             case_insensitive=True,
             activity=discord.Activity(name="over you", type=discord.ActivityType.watching)
         )
-
-        self.log.info("Starting bot...")
 
         if not os.path.isfile("blacklist.json"):
             with open("blacklist.json", "w") as f:
@@ -73,7 +81,7 @@ class GlaDOS(commands.Bot):
         self.console = None
         self.uptime = None
         self.session = None
-        self.highlight_words = []
+        self.trigger_words = []
         self.loop.create_task(self.prepare_bot())
 
         # user_id: spam_amount
@@ -93,15 +101,15 @@ class GlaDOS(commands.Bot):
         self.pool = await db.Table.create_pool(self.config.database_uri)
         self.session = aiohttp.ClientSession(loop=self.loop)
 
-        # Cache a list of highlight words for lookup
-        query = "SELECT word FROM highlight_words;"
+        # Cache a list of trigger words for lookup
+        query = "SELECT word FROM trigger_words;"
 
         records = await self.pool.fetch(query)
 
-        self.highlight_words = [r[0] for r in records]
+        self.trigger_words = [r[0] for r in records]
 
         # Remove duplicates
-        self.highlight_words = list(dict.fromkeys(self.highlight_words))
+        self.trigger_words = list(dict.fromkeys(self.trigger_words))
 
     async def delete_message_in(self, message, seconds=5.0):
         await asyncio.sleep(seconds)

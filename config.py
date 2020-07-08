@@ -24,6 +24,8 @@ class Config:
 
         self.database_uri = self._get("database-uri")
 
+        self.debug = self._get("debug", optional=True, default=False)
+
     def _get(self, key, *, optional=False, default=None):
         # Set the attribute
         value = self._data.get(key) or default

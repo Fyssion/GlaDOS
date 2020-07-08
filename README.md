@@ -7,6 +7,6 @@ A Discord bot that watches chat for your trigger words and notifies you if it se
 Features:
 
 - "Highlight" trigger word system
-- Blocking and tempblocking users from triggering your highlight words
+- Blocking and tempblocking users and channels from triggering notifications
 - Easy-to-read notification messages
 - More features on the way, such as setting your timezone

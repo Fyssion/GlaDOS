@@ -144,27 +144,20 @@ class Meta(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def on_mention_msg(self, message):
+        if self.bot.debug:
+            return
+
         content = message.content
         id = self.bot.user.id
+
         if content == f"<@{id}>" or content == f"<@!{id}>":
-            dev = self.bot.get_user(224513210471022592)
             await message.channel.send(
                 f"Hello and, again, welcome to the Aperture Science computer-aided enrichment center."
                 "\nIf you're curious about me, type:"
                 f" `@{self.bot.user} help`"
             )
 
-    # @commands.Cog.listener("on_error")
-    # async def _dm_dev(self, event):
-    #     e = sys.exc_info()
-    #     full =''.join(traceback.format_exception(type(e), e, e.__traceback__, 1))
-    #     owner = self.bot.get_user(self.bot.owner_id)
-    #     await owner.send(f"Error in {event}:```py\n{full}```")
-
     async def send_unexpected_error(self, ctx, error):
-        formatted = "".join(
-            traceback.format_exception(type(error), error, error.__traceback__, 1)
-        )
         self.bot.error_cache.append(error)
 
         em = discord.Embed(
@@ -208,7 +201,7 @@ class Meta(commands.Cog):
         if hasattr(ctx, "handled"):
             return
 
-        if ctx.command.cog and ctx.command.cog.qualified_name in ["Config", "Highlight"]:
+        if ctx.command.cog and ctx.command.cog.qualified_name in ["Config", "Scanner"]:
             self.bot.delete_timer(ctx.message)
             send = ctx.safe_send
 
