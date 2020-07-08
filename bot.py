@@ -7,7 +7,6 @@ import aiohttp
 import json
 import collections
 import os
-import asyncio
 
 from config import Config
 from cogs.utils import db
