@@ -21,8 +21,6 @@ class Meta(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def on_mention_msg(self, message):
-        if self.bot.debug:
-            return
         content = message.content
         id = self.bot.user.id
         if content == f"<@{id}>" or content == f"<@!{id}>":

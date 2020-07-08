@@ -1,5 +1,7 @@
 discord.py>=1.2.5
+git+https://github.com/Rapptz/discord-ext-menus
 click
 asyncpg
 pyyaml
 jishaku
+psutil

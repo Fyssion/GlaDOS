@@ -7,6 +7,7 @@ import aiohttp
 import json
 import collections
 import os
+import asyncio
 
 from config import Config
 from cogs.utils import db
@@ -39,6 +40,7 @@ initial_extensions = [
     "cogs.admin",
     "cogs.highlight",
     "cogs.meta",
+    "cogs.stats",
 ]
 
 
@@ -68,6 +70,7 @@ class BetterHighlight(commands.Bot):
         self.console = None
         self.uptime = None
         self.session = None
+        self.highlight_words = []
         self.loop.create_task(self.prepare_bot())
 
         # user_id: spam_amount
@@ -78,8 +81,6 @@ class BetterHighlight(commands.Bot):
 
         self.cogs_to_load = initial_extensions
 
-        self.add_check(self.private_cog_check)
-
         self.load_extension("jishaku")
 
         for cog in initial_extensions:
@@ -88,6 +89,16 @@ class BetterHighlight(commands.Bot):
     async def prepare_bot(self):
         self.pool = await db.Table.create_pool(self.config.database_uri)
         self.session = aiohttp.ClientSession(loop=self.loop)
+
+        # Cache a list of highlight words for lookup
+        query = "SELECT word FROM highlight_words;"
+
+        records = await self.pool.fetch(query)
+
+        self.highlight_words = [r[0] for r in records]
+
+        # Remove duplicates
+        self.highlight_words = list(dict.fromkeys(self.highlight_words))
 
     def add_to_blacklist(self, user):
         self.blacklist.append(str(user.id))
@@ -147,8 +158,8 @@ class BetterHighlight(commands.Bot):
         await self.invoke(ctx)
 
     async def on_ready(self):
-        if self.startup_time is None:
-            self.startup_time = d.now()
+        if self.uptime is None:
+            self.uptime = d.now()
         if self.console is None:
             self.console = self.get_channel(711952122132037722)
 

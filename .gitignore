@@ -2,4 +2,7 @@
 env/*
 venv/*
 
+migrations/*
 config.yml
+betterhighlight.log
+blacklist.json

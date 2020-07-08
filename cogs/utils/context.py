@@ -94,6 +94,12 @@ class Context(commands.Context):
     def db(self):
         return self.bot.pool
 
+    async def safe_send(self, *args, **kwargs):
+        if "delete_after" not in kwargs:
+            kwargs["delete_after"] = 5.0
+
+        await self.send(*args, **kwargs)
+
     def tick(self, tick):
         tick = bool(tick)
         ticks = {True: "\N{WHITE HEAVY CHECK MARK}", False: "\N{CROSS MARK}"}
