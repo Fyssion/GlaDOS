@@ -208,7 +208,7 @@ class Meta(commands.Cog):
         if hasattr(ctx, "handled"):
             return
 
-        if ctx.command.cog and ctx.command.cog.name in ["Config", "Highlight"]:
+        if ctx.command.cog and ctx.command.cog.qualified_name in ["Config", "Highlight"]:
             self.bot.delete_timer(ctx.message)
             send = ctx.safe_send
 
