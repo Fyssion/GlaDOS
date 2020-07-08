@@ -7,6 +7,7 @@ import aiohttp
 import json
 import collections
 import os
+import asyncio
 
 from config import Config
 from cogs.utils import db
@@ -37,9 +38,11 @@ log.addHandler(file_handler)
 
 initial_extensions = [
     "cogs.admin",
+    "cogs.config",
     "cogs.highlight",
     "cogs.meta",
     "cogs.stats",
+    "cogs.timers",
 ]
 
 
@@ -99,6 +102,13 @@ class GlaDOS(commands.Bot):
 
         # Remove duplicates
         self.highlight_words = list(dict.fromkeys(self.highlight_words))
+
+    async def delete_message_in(self, message, seconds=5.0):
+        await asyncio.sleep(seconds)
+        await message.delete()
+
+    def delete_timer(self, message, seconds=5.0):
+        self.loop.create_task(self.delete_message_in(message, seconds))
 
     def add_to_blacklist(self, user):
         self.blacklist.append(str(user.id))

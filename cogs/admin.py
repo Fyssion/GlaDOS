@@ -258,7 +258,7 @@ class Admin(commands.Cog):
     async def _error(self, ctx):
         first_step = list(self.bot.error_cache)
         errors = first_step[::-1]
-        pages = MenuPages(source=AllErrorsSource(errors), clear_reactions_after=True,)
+        pages = menus.MenuPages(source=AllErrorsSource(errors), clear_reactions_after=True,)
         await pages.start(ctx)
 
     @_error.command(aliases=["pre", "p", "prev"])
@@ -272,7 +272,7 @@ class Admin(commands.Cog):
         trace = e.__traceback__
         verbosity = 4
         lines = traceback.format_exception(etype, e, trace, verbosity)
-        pages = MenuPages(
+        pages = menus.MenuPages(
             source=ErrorSource(lines, len(self.bot.error_cache) - 1),
             clear_reactions_after=True,
         )
@@ -291,7 +291,7 @@ class Admin(commands.Cog):
         trace = e.__traceback__
         verbosity = 4
         lines = traceback.format_exception(etype, e, trace, verbosity)
-        pages = MenuPages(source=ErrorSource(lines, i), clear_reactions_after=True,)
+        pages = menus.MenuPages(source=ErrorSource(lines, i), clear_reactions_after=True,)
         await pages.start(ctx)
 
     @commands.command(
@@ -300,7 +300,7 @@ class Admin(commands.Cog):
     @commands.is_owner()
     async def logout_command(self, ctx):
         self.log.info("Logging out of Discord.")
-        await ctx.send("Logging out :wave:")
+        await ctx.send("Killing me again? Goodbye...")
         await self.bot.session.close()
         await self.bot.logout()
 

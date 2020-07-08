@@ -5,3 +5,5 @@ asyncpg
 pyyaml
 jishaku
 psutil
+parsedatetime
+python-dateutil

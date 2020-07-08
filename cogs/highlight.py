@@ -44,6 +44,8 @@ class Highlight(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        self.delete_timer = bot.delete_timer
+
     async def send_highlight(self, message, word, record):
         highlight_word = HighlightWord.from_record(record)
         user = self.bot.get_user(highlight_word.user_id)
@@ -60,12 +62,23 @@ class Highlight(commands.Cog):
             log.info(f"User {user} is the message author, aborting")
             return
 
-        self.bot.dispatch("highlight", message, highlight_word)
-
         guild = message.guild
         channel = message.channel
 
-        # fetch user stuff here
+        # Fetch user config to see if the author is blocked
+        config = self.bot.get_cog("Config")
+
+        if config:
+            log.info(f"Fetching user config for {user}")
+            user_config = await config.get_config(user.id)
+
+            if user_config:
+                log.info(f"User config found for {user}")
+                if message.author.id in user_config.blocked_users:
+                    log.info(f"{message.author} is in {user}'s blocked list, aborting")
+                    return
+
+        self.bot.dispatch("highlight", message, highlight_word)
 
         log.info(f"Building message list for message {message.id}")
         # Get a list of messages that meet certain requirements
@@ -218,13 +231,6 @@ class Highlight(commands.Cog):
             if word in message.content.lower():
                 self.bot.loop.create_task(self.get_highlight_words(message, word))
 
-    async def delete_message_in(self, message, seconds=5.0):
-        await asyncio.sleep(seconds)
-        await message.delete()
-
-    def delete_timer(self, message, seconds=5.0):
-        self.bot.loop.create_task(self.delete_message_in(message, seconds))
-
     @commands.command(
         name="add",
         description="Add a word to your highlighted words list",
@@ -312,7 +318,7 @@ class Highlight(commands.Cog):
 
         em = discord.Embed(title="Your Highlight Words", description=words, color=discord.Color.blurple())
 
-        em.set_footer(text=f"Total words: {len(words)}")
+        em.set_footer(text=f"Total words: {len(records)}")
 
         await ctx.safe_send(embed=em, delete_after=10.0)
 

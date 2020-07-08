@@ -208,16 +208,23 @@ class Meta(commands.Cog):
         if hasattr(ctx, "handled"):
             return
 
+        if ctx.command.cog and ctx.command.cog.name in ["Config", "Highlight"]:
+            self.bot.delete_timer(ctx.message)
+            send = ctx.safe_send
+
+        else:
+            send = ctx.send
+
         if isinstance(error, commands.NoPrivateMessage):
-            await ctx.send(
+            await send(
                 f"{ctx.tick(False)} Sorry, this command can't be used in DMs."
             )
 
         elif isinstance(error, commands.ArgumentParsingError):
-            await ctx.send(f"{ctx.tick(False)} {error}")
+            await send(f"{ctx.tick(False)} {error}")
 
         elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(
+            await send(
                 f"{ctx.tick(False)} **You are on cooldown.** Try again after {int(error.retry_after)} seconds."
             )
 
@@ -241,12 +248,12 @@ class Meta(commands.Cog):
                 # param = param.replace('"', "").strip()
                 # param = discord.utils.escape_mentions(param)
                 # param = discord.utils.escape_markdown(param)
-                await ctx.send(f"{ctx.tick(False)} You must specify a number.")
+                await send(f"{ctx.tick(False)} You must specify a number.")
             else:
-                await ctx.send(f"{ctx.tick(False)} {error}")
+                await send(f"{ctx.tick(False)} {error}")
 
         elif isinstance(error, commands.errors.MissingRequiredArgument):
-            await ctx.send(
+            await send(
                 f"{ctx.tick(False)} Missing a required argument: `{error.param.name}`"
             )
 
@@ -269,6 +276,24 @@ class Meta(commands.Cog):
                 )
 
                 await self.send_unexpected_error(ctx, error)
+
+    @commands.command(description="Invite me to your server")
+    async def invite(self, ctx):
+        permissions = discord.Permissions(
+            read_messages=True,
+            send_messages=True,
+            embed_links=True,
+            add_reactions=True,
+            manage_messages=True,
+        )
+
+        url = discord.utils.oauth_url(self.bot.user.id, permissions=permissions)
+
+        await ctx.send(
+            "Aww, how sweet of you to ask!\n"
+            "You can invite me to your server with this link:"
+            f"\n<{url}>"
+        )
 
 
 def setup(bot):
