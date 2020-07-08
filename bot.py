@@ -52,9 +52,10 @@ class GlaDOS(commands.Bot):
 
         super().__init__(
             command_prefix=commands.when_mentioned,
-            description="Notifications for trigger words in messages",
+            description="I'll keep an eye on chat for your highlight words and notify you if I see one",
             owner_id=224513210471022592,
             case_insensitive=True,
+            activity=discord.Activity(name="over you", type=discord.ActivityType.watching)
         )
 
         self.log.info("Starting bot...")
