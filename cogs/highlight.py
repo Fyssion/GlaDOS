@@ -32,6 +32,7 @@ class HighlightWord:
         self = cls()
 
         self.id = record["id"]
+        self.word = record["word"]
         self.user_id = record["user_id"]
         self.guild_id = record["guild_id"]
         self.created_at = record["created_at"]
@@ -44,7 +45,6 @@ class Highlight(commands.Cog):
         self.bot = bot
 
     async def send_highlight(self, message, word, record):
-
         highlight_word = HighlightWord.from_record(record)
         user = self.bot.get_user(highlight_word.user_id)
 
@@ -59,6 +59,8 @@ class Highlight(commands.Cog):
         if user == message.author:
             log.info(f"User {user} is the message author, aborting")
             return
+
+        self.bot.dispatch("highlight", message, highlight_word)
 
         guild = message.guild
         channel = message.channel
@@ -187,7 +189,7 @@ class Highlight(commands.Cog):
         em.set_footer(text="Message sent")
 
         msg = (
-            f"New Highlight: **{word}**\n"
+            f"I found a highlight word: **{word}**!\n"
             f"Channel: {channel.mention}\n"
             f"Server: {guild}"
         )

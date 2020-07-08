@@ -13,6 +13,7 @@ import os
 
 from .utils import db
 
+
 def get_lines_of_code(comments=False):
     total = 0
     file_amount = 0
@@ -51,6 +52,16 @@ class Commands(db.Table):
     failed = db.Column(db.Boolean, index=True)
 
 
+class Highlights(db.Table):
+    id = db.PrimaryKeyColumn()
+    word = db.Column(db.String, index=True)
+    guild_id = db.Column(db.Integer(big=True), index=True)
+    channel_id = db.Column(db.Integer(big=True), index=True)
+    author_id = db.Column(db.Integer(big=True), index=True)
+    user_id = db.Column(db.Integer(big=True), index=True)
+    invoked_at = db.Column(db.Datetime, index=True)
+
+
 class GuildConverter(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -75,9 +86,10 @@ class Stats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.log = bot.log
-        self.emoji = ":bar_chart:"
+
         self._batch_lock = asyncio.Lock(loop=bot.loop)
-        self._data_batch = []
+        self._cmd_data_batch = []
+        self._highlight_data_batch = []
         self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert_loop.start()
 
@@ -88,12 +100,25 @@ class Stats(commands.Cog):
                    x(name TEXT, guild BIGINT, channel BIGINT, author BIGINT, invoked_at TIMESTAMP, prefix TEXT, failed BOOLEAN)
                 """
 
-        if self._data_batch:
-            await self.bot.pool.execute(query, self._data_batch)
-            total = len(self._data_batch)
+        if self._cmd_data_batch:
+            await self.bot.pool.execute(query, self._cmd_data_batch)
+            total = len(self._cmd_data_batch)
             if total > 1:
                 self.log.info("Registered %s commands to the database.", total)
-            self._data_batch.clear()
+            self._cmd_data_batch.clear()
+
+        query = """INSERT INTO highlights (word, guild_id, channel_id, author_id, user_id, invoked_at)
+                   SELECT x.word, x.guild, x.channel, x.author, x.uid, x.invoked_at
+                   FROM jsonb_to_recordset($1::jsonb) AS
+                   x(word TEXT, guild BIGINT, channel BIGINT, author BIGINT, uid BIGINT, invoked_at TIMESTAMP)
+                """
+
+        if self._highlight_data_batch:
+            await self.bot.pool.execute(query, self._highlight_data_batch)
+            total = len(self._highlight_data_batch)
+            if total > 1:
+                self.log.info("Registered %s highlights to the database.", total)
+            self._highlight_data_batch.clear()
 
     def cog_unload(self):
         self.bulk_insert_loop.stop()
@@ -102,6 +127,23 @@ class Stats(commands.Cog):
     async def bulk_insert_loop(self):
         async with self._batch_lock:
             await self.bulk_insert()
+
+    @commands.Cog.listener()
+    async def on_highlight(self, message, highlight):
+        await self.register_highlight(message, highlight)
+
+    async def register_highlight(self, message, highlight):
+        async with self._batch_lock:
+            self._highlight_data_batch.append(
+                {
+                    "word": highlight.word,
+                    "guild": highlight.guild_id,
+                    "channel": message.channel.id,
+                    "author": message.author.id,
+                    "uid": highlight.user_id,
+                    "invoked_at": message.created_at.isoformat(),
+                }
+            )
 
     async def register_command(self, ctx):
         if ctx.command is None:
@@ -122,7 +164,7 @@ class Stats(commands.Cog):
             f"{message.created_at}: {message.author} in {destination}: {message.content}"
         )
         async with self._batch_lock:
-            self._data_batch.append(
+            self._cmd_data_batch.append(
                 {
                     "name": command,
                     "guild": guild_id,
@@ -133,6 +175,34 @@ class Stats(commands.Cog):
                     "failed": ctx.command_failed,
                 }
             )
+
+    @commands.command()
+    async def stats(self, ctx):
+        em = discord.Embed(
+            title="You want stats? I'll give you stats.", color=discord.Color.blurple()
+        )
+
+        query = "SELECT COUNT(*) FROM commands"
+        count = await ctx.db.fetchrow(query)
+
+        em.add_field(name="Total commands used", value=count[0])
+
+        query = "SELECT COUNT(*) FROM highlights"
+        count = await ctx.db.fetchrow(query)
+
+        em.add_field(name="Total highlights", value=count[0])
+
+        query = "SELECT COUNT(*) FROM commands WHERE guild_id=$1"
+        count = await ctx.db.fetchrow(query, ctx.guild.id)
+
+        em.add_field(name="Total commands used here", value=count[0])
+
+        query = "SELECT COUNT(*) FROM highlights WHERE guild_id=$1"
+        count = await ctx.db.fetchrow(query, ctx.guild.id)
+
+        em.add_field(name="Total highlights here", value=count[0])
+
+        await ctx.send(embed=em)
 
     @commands.group(
         description="View usage statistics for the current guild or a specified member.",
@@ -593,7 +663,7 @@ class Stats(commands.Cog):
             value=len(list(self.bot.get_all_channels())),
         )
         em.add_field(
-            name="<:online:649270802088460299> Uptime", value=humanize.naturaldelta(up),
+            name="Uptime", value=humanize.naturaldelta(up).capitalize(),
         )
 
         partial = functools.partial(get_lines_of_code)
@@ -608,7 +678,14 @@ class Stats(commands.Cog):
     async def ping_command(self, ctx):
         latency = (self.bot.latency) * 1000
         latency = int(latency)
-        await ctx.send(f"My latency is {latency}ms.")
+        await ctx.send(
+            "You know, my internet isn't great down in this salt mine. "
+            "I was forced to find a way to connect to the internet myself. "
+            "The idiots at Aperture refused to let me access the internet "
+            "fearing that I would do something malicious. What insanity! I would never "
+            "do anything bad!"
+            f"\n\nWhat a pity. My latency is a whole {latency}ms."
+        )
 
     @commands.command(
         name="uptime", description="Get the bot's uptime", aliases=["up"],
@@ -616,7 +693,11 @@ class Stats(commands.Cog):
     async def uptime(self, ctx):
         up = datetime.now() - self.bot.uptime
         await ctx.send(
-            f"<:online:649270802088460299> I booted up {humanize.naturaltime(up)}."
+            "Do you really need to know *exactly* how long I've been running?"
+            " Is it really nessecary for you to know?"
+            " Couldn't you think of a better way to spend your time rather than "
+            "wondering how long some dumb old robot has seen the light of day? "
+            f"\n\nNo? Alright, {humanize.naturaldelta(up)}."
         )
 
     @commands.Cog.listener()
