@@ -74,8 +74,13 @@ class Highlight(commands.Cog):
 
             if user_config:
                 log.info(f"User config found for {user}")
+
                 if message.author.id in user_config.blocked_users:
                     log.info(f"{message.author} is in {user}'s blocked list, aborting")
+                    return
+
+                if message.channel.id in user_config.blocked_channels:
+                    log.info(f"{message.channel} is in {user}'s blocked list, aborting")
                     return
 
         self.bot.dispatch("highlight", message, highlight_word)
