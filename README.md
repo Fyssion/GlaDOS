@@ -1,6 +1,6 @@
 # GlaDOS
 
-GlaDOS is a Discord bot that keeps an eye on chat for your trigger words and notifies you if it sees one
+A Discord bot that watches chat for your trigger words and notifies you if it sees one
 
 ![GlaDOS example](https://i.imgur.com/RQpaEWb.png)
 
