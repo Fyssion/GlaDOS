@@ -310,7 +310,11 @@ class Highlight(commands.Cog):
 
         words = "\n".join([r[0] for r in records])
 
-        await ctx.safe_send(f"Your highlight words:\n{words}", delete_after=10.0)
+        em = discord.Embed(title="Your Highlight Words", description=words, color=discord.Color.blurple())
+
+        em.set_footer(text=f"Total words: {len(words)}")
+
+        await ctx.safe_send(embed=em, delete_after=10.0)
 
 
 def setup(bot):
