@@ -46,16 +46,42 @@ class Scanner(commands.Cog):
 
         self.delete_timer = bot.delete_timer
 
-    def format_message(self, message, *, content=None, highlight=False):
+    def format_message(self, message, *, highlight=None):
         time_formatting = "%H:%M "
 
-        content = content or discord.utils.escape_markdown(message.content)
+        content = message.content if not highlight else discord.utils.escape_markdown(message.content)
+
+        if highlight:
+            # Bold the word in the highlighted message
+            position = 0
+            start_index = None
+            content = list(discord.utils.escape_markdown(message.content))
+
+            for i, letter in enumerate(content):
+                if letter.lower() == highlight[position]:
+                    if position == 0:
+                        start_index = i
+
+                    if position == len(highlight) - 1:
+                        content.insert(start_index, "**")
+                        content.insert(i + 2, "**")
+
+                        position = 0
+                        start_index = None
+
+                    position += 1
+
+                else:
+                    position = 0
+                    start_index = None
+
+            content = "".join(content)
 
         sent = message.created_at.strftime(time_formatting)
         timezone = message.created_at.strftime("%Z")
         sent += timezone or "UTC"
 
-        if len(content) > 50:
+        if not highlight and len(content) > 50:
             content = content[:50] + "..."
 
         else:
@@ -108,6 +134,8 @@ class Scanner(commands.Cog):
         self.bot.dispatch("trigger", message, trigger_word)
 
         log.info(f"Building notification for message {message.id}")
+
+        log.info(f"Getting list of previous messages for message {message.id}")
         # Get a list of messages that meet certain requirements
         matching_messages = [
             m
@@ -125,35 +153,11 @@ class Scanner(commands.Cog):
         for msg in reversed(previous_messages):
             messages.append(self.format_message(msg))
 
-        # Bold the word in the highlighted message
-        position = 0
-        start_index = None
-        content = list(discord.utils.escape_markdown(message.content))
-
-        for i, letter in enumerate(content):
-            if letter.lower() == word[position]:
-                if position == 0:
-                    start_index = i
-
-                if position == len(word) - 1:
-                    content.insert(start_index, "**")
-                    content.insert(i + 2, "**")
-
-                    position = 0
-                    start_index = None
-
-                position += 1
-
-            else:
-                position = 0
-                start_index = None
-
-        content = "".join(content)
-
-        messages.append(self.format_message(message, content=content, highlight=True))
+        messages.append(self.format_message(message, highlight=word))
 
         # See if there are any messages after
 
+        log.info(f"Getting list of next messages for message {message.id}")
         # First, see if there are any messages after that have already been sent
         next_messages = []
 
@@ -167,30 +171,34 @@ class Scanner(commands.Cog):
 
         # If there are messages already sent, append those and continue
         if len(matching_messages) > 2:
+            log.info(f"Found 2+ cached messages for message {message.id}")
             next_messages.append(matching_messages[0])
             next_messages.append(matching_messages[1])
 
         # Otherwise, add the cached message(s)
         # and/or wait for the remaining message(s)
         else:
+            log.info(f"Found {len(matching_messages)} cached messages for message {message.id}")
             for msg in matching_messages:
                 next_messages.append(msg)
 
             def check(ms):
-                return ms.channel == channel
+                return ms.channel == channel and ms.id != message.id and ms.created_at > message.created_at
 
             # Waiting for next messages
             for i in range(2 - len(matching_messages)):
+                log.info(f"Waiting for message {i+1}/{2-len(matching_messages)} for message {message.id}")
                 try:
                     msg = await self.bot.wait_for("message", timeout=5.0, check=check)
+                    log.info(f"Found message {i+1}/{2-len(matching_messages)} (ID: {msg.id}) for message {message.id}")
                     next_messages.append(msg)
 
                 except asyncio.TimeoutError:
-                    pass
+                    log.info(f"Timed out while waiting for message {i+1}/{2-len(matching_messages)} for message {message.id}")
 
         # Add the next messages to the formatted list
         for msg in next_messages:
-            messages.append(self.format_message(message))
+            messages.append(self.format_message(msg))
 
         em = discord.Embed(
             title=f"Trigger word: {word}",
@@ -209,6 +217,8 @@ class Scanner(commands.Cog):
             f"Channel: {channel.mention}\n"
             f"Server: {guild}"
         )
+
+        log.info(f"Sending notification to user {user} for message {message.id}")
 
         await user.send(msg, embed=em)
 
