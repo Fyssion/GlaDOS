@@ -49,13 +49,13 @@ class Scanner(commands.Cog):
     def format_message(self, message, *, highlight=None):
         time_formatting = "%H:%M "
 
-        content = message.content if not highlight else discord.utils.escape_markdown(message.content)
+        content = discord.utils.escape_markdown(message.content)
 
         if highlight:
             # Bold the word in the highlighted message
             position = 0
             start_index = None
-            content = list(discord.utils.escape_markdown(message.content))
+            content = list(content)
 
             for i, letter in enumerate(content):
                 if letter.lower() == highlight[position]:
