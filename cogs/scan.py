@@ -54,26 +54,22 @@ class Scanner(commands.Cog):
         if highlight:
             # Bold the word in the highlighted message
             position = 0
-            start_index = None
             content = list(content)
 
             for i, letter in enumerate(content):
                 if letter.lower() == highlight[position]:
-                    if position == 0:
-                        start_index = i
 
                     if position == len(highlight) - 1:
-                        content.insert(start_index, "**")
+                        content.insert(i - len(highlight) + 1, "**")
                         content.insert(i + 2, "**")
 
                         position = 0
-                        start_index = None
 
-                    position += 1
+                    else:
+                        position += 1
 
                 else:
                     position = 0
-                    start_index = None
 
             content = "".join(content)
 
@@ -152,6 +148,8 @@ class Scanner(commands.Cog):
 
         for msg in reversed(previous_messages):
             messages.append(self.format_message(msg))
+
+        log.info(f"Adding trigger message for message {message.id}")
 
         messages.append(self.format_message(message, highlight=word))
 
