@@ -218,7 +218,12 @@ class Scanner(commands.Cog):
 
         log.info(f"Sending notification to user {user} for message {message.id}")
 
-        await user.send(msg, embed=em)
+        try:
+            await user.send(msg, embed=em)
+            log.info(f"Successfully sent notification to user {user} for message {message.id}")
+
+        except (discord.HTTPException, discord.Forbidden):
+            log.info(f"Could not send notification to user {user} for message {message.id}")
 
     async def get_trigger_words(self, message, word):
         query = """SELECT * FROM trigger_words
