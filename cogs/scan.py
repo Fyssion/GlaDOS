@@ -4,6 +4,7 @@ import discord
 import asyncpg
 import asyncio
 import logging
+import re
 
 from .utils import db
 
@@ -108,6 +109,9 @@ class Scanner(commands.Cog):
 
         guild = message.guild
         channel = message.channel
+
+        if user.id not in [m.id for m in channel.members]:
+            log.info(f"User {user} can't see #{channel}, aborting")
 
         # Fetch user config to see if the author is blocked
         config = self.bot.get_cog("Config")
@@ -225,7 +229,7 @@ class Scanner(commands.Cog):
         except (discord.HTTPException, discord.Forbidden):
             log.info(f"Could not send notification to user {user} for message {message.id}")
 
-    async def get_trigger_words(self, message, word):
+    async def get_trigger_words(self, message, word, already_seen):
         query = """SELECT * FROM trigger_words
                    WHERE word=$1 AND guild_id=$2;
                 """
@@ -233,7 +237,15 @@ class Scanner(commands.Cog):
         records = await self.bot.pool.fetch(query, word, message.guild.id)
 
         for record in records:
-            self.bot.loop.create_task(self.send_notification(message, word, record))
+            log.info(f"Word: {word} | Found record for user {record['user_id']} for message {message.id}")
+
+            if record["user_id"] not in already_seen:
+                self.bot.loop.create_task(self.send_notification(message, word, record))
+                return record["user_id"]
+
+            else:
+                log.info(f"Word: {word} | User {record['user_id']} has already seen message {message.id}, aborting")
+                return None
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -243,9 +255,26 @@ class Scanner(commands.Cog):
         # Check if the word is in the trigger words cache
         # Create a task so I can run the queries and send the messages concurrently
         # and not one at a time
-        for word in self.bot.trigger_words:
-            if word in message.content.lower():
-                self.bot.loop.create_task(self.get_trigger_words(message, word))
+
+        already_seen = []
+
+        for trigger in self.bot.trigger_words:
+            for word in message.content.lower().split(" "):
+                match = re.search(trigger, word)
+
+                if not match:
+                    continue
+
+                span = match.span()
+
+                start_index = span[0]
+
+                if start_index > 0:
+                    continue
+
+                user = await self.get_trigger_words(message, trigger, already_seen)
+                if user:
+                    already_seen.append(user)
 
     @commands.command(
         name="add",
@@ -259,6 +288,9 @@ class Scanner(commands.Cog):
             raise commands.BadArgument("You can only add single words to your triggers.")
 
         word = word[0].lower().strip()
+
+        if len(word) < 3:
+            raise commands.BadArgument("Your word is too small. Must be three or more characters.")
 
         query = """INSERT INTO trigger_words (word, user_id, guild_id)
                    VALUES ($1, $2, $3);
@@ -311,6 +343,9 @@ class Scanner(commands.Cog):
             await ctx.safe_send(f"That word isn't in your triggers.")
 
         else:
+            if word in self.bot.trigger_words:
+                self.bot.trigger_words.pop(self.bot.trigger_words.index(word))
+
             await ctx.safe_send("Successfully updated your triggers.")
 
     @commands.command(
