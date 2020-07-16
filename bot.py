@@ -93,6 +93,7 @@ class GlaDOS(commands.Bot):
         self.cogs_to_load = initial_extensions
 
         self.load_extension("jishaku")
+        self.load_extension("statsme")
 
         for cog in initial_extensions:
             self.load_extension(cog)
